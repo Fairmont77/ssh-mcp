@@ -1,0 +1,5 @@
+node_modules/
+.remember/
+.omc/
+HOSTS.local.md
+ssh_mcp_hosts.json
