@@ -44,8 +44,21 @@ export function getHost(name: string): Host | undefined {
   return h;
 }
 
-/** Add or overwrite a host by name. Returns the saved host. */
+/**
+ * Conservative token: alnum plus . _ - and never leading "-" (which ssh/scp
+ * would parse as an option flag → argument injection / RCE). Rejects spaces,
+ * quotes, @ and : so user/host can't smuggle extra fields.
+ */
+const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Add or overwrite a host by name. Returns the saved host. Throws on unsafe fields. */
 export function addHost(h: Host): Host {
+  for (const [field, val] of [["name", h.name], ["user", h.user], ["host", h.host]] as const) {
+    if (!SAFE.test(val)) throw new Error(`Unsafe ${field} "${val}": must match ${SAFE} (no leading "-", no spaces/@/:).`);
+  }
+  if (h.port !== undefined && (!Number.isInteger(h.port) || h.port < 1 || h.port > 65535)) {
+    throw new Error(`Invalid port "${h.port}": must be an integer 1-65535.`);
+  }
   const hosts = load().filter((x) => x.name !== h.name);
   hosts.push(h);
   save(hosts);

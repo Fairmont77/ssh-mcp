@@ -72,14 +72,19 @@ export function sshExec(h: Host, command: string, timeoutMs = 60000): Promise<Ex
   return run("ssh", args, timeoutMs);
 }
 
+/** Rewrite a leading "-" local path to "./-..." so scp can't parse it as a flag. */
+function safeLocal(p: string): string {
+  return p.startsWith("-") ? `./${p}` : p;
+}
+
 /** Upload a local file to the remote host via scp (reuses the control socket). */
 export function scpPut(h: Host, localPath: string, remotePath: string, timeoutMs = 120000): Promise<ExecResult> {
-  const args = [...baseOpts(h), localPath, `${h.user}@${h.host}:${remotePath}`];
+  const args = [...baseOpts(h), "--", safeLocal(localPath), `${h.user}@${h.host}:${remotePath}`];
   return run("scp", args, timeoutMs);
 }
 
 /** Download a remote file to a local path via scp. */
 export function scpGet(h: Host, remotePath: string, localPath: string, timeoutMs = 120000): Promise<ExecResult> {
-  const args = [...baseOpts(h), `${h.user}@${h.host}:${remotePath}`, localPath];
+  const args = [...baseOpts(h), "--", `${h.user}@${h.host}:${remotePath}`, safeLocal(localPath)];
   return run("scp", args, timeoutMs);
 }
