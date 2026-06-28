@@ -37,7 +37,7 @@ export interface ExecResult {
   timedOut: boolean;
 }
 
-function run(cmd: string, args: string[], timeoutMs: number, stdin?: string): Promise<ExecResult> {
+export function run(cmd: string, args: string[], timeoutMs: number, stdin?: string): Promise<ExecResult> {
   return new Promise((resolve) => {
     const child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";

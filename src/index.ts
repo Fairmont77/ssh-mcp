@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { addHost, listHosts, getHost, removeHost, REGISTRY_PATH } from "./registry.ts";
 import { sshExec, scpPut, scpGet, type ExecResult } from "./ssh.ts";
+import { isAuthDenied, provisionHost, provisionHint } from "./provision.ts";
 
 const server = new McpServer({ name: "ssh-mcp", version: "0.1.0" });
 
@@ -72,9 +73,27 @@ server.registerTool(
       host: z.string().describe("Registered host name"),
       command: z.string().describe("Shell command to run on the remote"),
       timeout_ms: z.number().int().optional().describe("Kill after this many ms (default 60000)"),
+      password_file: z
+        .string()
+        .optional()
+        .describe(
+          "Path to a file holding the host's login password (NEVER pass the password inline — it would be logged). Used ONCE to auto-provision a dedicated ed25519 key, then the file is wiped (overwritten + deleted). Must be a temp file, not an SSH key. Only needed the first time, when key-auth fails."
+        ),
     },
   },
-  async ({ host, command, timeout_ms }) => text(fmt(await sshExec(requireHost(host), command, timeout_ms ?? 60000)))
+  async ({ host, command, timeout_ms, password_file }) => {
+    const h = requireHost(host);
+    const timeout = timeout_ms ?? 60000;
+    let r = await sshExec(h, command, timeout);
+    if (isAuthDenied(r)) {
+      if (!password_file) return text(`${fmt(r)}\n\n${provisionHint(host)}`);
+      const prov = await provisionHost(h, password_file);
+      if (!prov.ok) return text(`Provisioning failed: ${prov.message}`);
+      r = await sshExec(requireHost(host), command, timeout);
+      return text(`[${prov.message}]\n${fmt(r)}`);
+    }
+    return text(fmt(r));
+  }
 );
 
 server.registerTool(
